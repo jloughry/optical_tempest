@@ -7,8 +7,10 @@
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/kbio.h>
-#include <sys/kbd.h>
+#ifdef OS_SOLARIS
+  #include <sys/kbio.h>
+  #include <sys/kbd.h>
+#endif
 #include <time.h>
 #include <unistd.h>
 

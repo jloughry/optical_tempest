@@ -1,7 +1,19 @@
-all::
-	@echo "There is nothing to build in this directory."
+target = sl
+
+CC = gcc
+CFLAGS = -Wall -Werror
+LFLAGS = 
+EDITOR = vi
+
+$(target): $(target).c
+	$(CC) $(CFLAGS) -o $@ $< $(LFLAGS)
+
+clean:
+	rm -fv $(target)
+
+test:
+	./$(target)
 
 vi:
-	make readme
+	$(EDITOR) $(target).c
 
-include common.mk
