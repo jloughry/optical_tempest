@@ -1,16 +1,11 @@
-/*
 // sl.c -- a covert channel using the Caps Lock LED.
-//
-// For Solaris 2.x on SPARC; compile with ${CC} sl.c -lposix4
-*/
+
+// Compile with: clang -Wall -Werror -o sl sl.c
 
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
-#ifdef OS_SOLARIS
-  #include <sys/kbio.h>
-  #include <sys/kbd.h>
-#endif
+#include <sys/ioctl.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -19,10 +14,6 @@
 void set_led (int fd, char *data);
 void time_led (int fd, char *data);
 void perror_exit (char *function_name);
-
-/* set up a 20 millisecond intersymbol delay */
-
-struct timespec min, max = { 0, 1000000000 / SPEED };
 
 int
 main (void)
@@ -82,7 +73,7 @@ void
 time_led (int fd, char *data)
 {
 	set_led (fd, data);
-	nanosleep (&min, &max);
+	usleep(1000000 / SPEED); // The bit time is 1 / SPEED bits per second.
 }
 
 /* display an error message and quit */
