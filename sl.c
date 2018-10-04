@@ -1,87 +1,108 @@
 // sl.c -- a covert channel using the Caps Lock LED.
 
-// Compile with: clang -Wall -Werror -o sl sl.c
+// Requires: a Linux operating system
+// Compile with: gcc -Wall -Werror -o sl sl.c
+// Run with: ./sl
 
-#include <fcntl.h>
+#include <linux/kd.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/ioctl.h>
-#include <time.h>
 #include <unistd.h>
 
-#define SPEED 50 /* data transmission speed (bits per second) */
+#define SCROLL_LOCK_LED 1
+#define NUM_LOCK_LED    2
+#define CAPS_LOCK_LED   4
 
-void set_led (int fd, char *data);
-void time_led (int fd, char *data);
-void perror_exit (char *function_name);
+#define SPEED 50 // This is the data transmission speed in bits per second.
+#define LED_TO_USE CAPS_LOCK_LED
 
-int
-main (void)
-{
-	char message[] = "My credit card number is 1234 5678 910 1112.";
-	char restore_data;
-	char *p = &message[0];
-	int fd;
+void get_LED_flags(char *current_led_flags);
+void set_LED_flags(char current_led_flags);
+void turn_on_LED(char which_LED);
+void turn_off_LED(char which_LED);
+void wait_one_bit_interval(void);
+void send_a_bit_out_the_LED(char which_LED, int bit_value);
 
-	/* open the keyboard device */
-	if ((fd = open ("/dev/kbd", O_RDONLY)) < 0)
-		perror_exit ("open");
+int main (void) {
+  char message[] = "My credit card number is 4716 3164 6296 3163";
 
-	/* save the state of the keyboard LEDs */
-	if (ioctl (fd, KIOCGLED, &restore_data) < 0)
-		perror_exit ("ioctl");
+  // First, save the state of the keyboard LEDs so we can restore them later.
+  char restore_state;
+  get_LED_flags(&restore_state);
 
-	while (*p) {
-		char data = LED_CAPS_LOCK;
-		int i;
+  // Transmit the message a character at a time.
+  char *p = &message[0];
+  while (*p) {
+    // start bit is always a "1".
+    send_a_bit_out_the_LED(LED_TO_USE, 1);
 
-		/* start bit is a "1" */
-		time_led (fd, &data);
+    // Send all 8 bits of the character, least significant bit first.
+    for (int i = 0; i < 8; i++) {
+      int bit_to_send = *p >> i & 0x01; // Extract a single bit.
+      send_a_bit_out_the_LED(LED_TO_USE, bit_to_send);
+    }
 
-		/* send 8 bits, least significant first */
-		for (i = 0; i < 8; i++) {
-			data = *p >> i & 1 ? LED_CAPS_LOCK : 0;
-			time_led (fd, &data);
-		}
+    // Stop bit is always a "0".
+    send_a_bit_out_the_LED(LED_TO_USE, 0);
 
-		/* stop bit is a "0" */
-		data = 0;
-		time_led (fd, &data);
+    p++; // Do the next character in the message.
+  }
 
-		/* next character of message */
-		p++;
-	}
+  // Restore state of the keyboard LEDs before we quit.
+  set_LED_flags(restore_state);
 
-	/* restore state of the keyboard LEDs */
-	set_led (fd, &restore_data);
-
-	return (close (fd));
+  return EXIT_SUCCESS;
 }
 
-/* turn keyboard LEDs on or off */
-
-void
-set_led (int fd, char *data)
-{
-	if (ioctl (fd, KIOCSLED, data) < 0)
-	perror_exit ("ioctl");
+void get_LED_flags(char *current_led_flags) {
+  if (ioctl(0, KDGETLED, current_led_flags)) {
+    perror("ioctl KDGETLED");
+    exit(EXIT_FAILURE);
+  }
 }
 
-/* transmit one bit */
-
-void
-time_led (int fd, char *data)
-{
-	set_led (fd, data);
-	usleep(1000000 / SPEED); // The bit time is 1 / SPEED bits per second.
+void set_LED_flags(char new_led_flags) {
+  if (ioctl(0, KDSETLED, new_led_flags)) {
+    perror("ioctl KDSETLED");
+    exit(EXIT_FAILURE);
+  }
 }
 
-/* display an error message and quit */
+void turn_on_LED(char which_LED) {
+  char flags = 0;
 
-void
-perror_exit (char *function_name)
-{
-	perror (function_name);
-	exit (1);
+  get_LED_flags(&flags);
+  flags |= which_LED;
+  set_LED_flags(flags);
+}
+
+void turn_off_LED(char which_LED) {
+  char flags = 0;
+
+  get_LED_flags(&flags);
+  flags &= ~which_LED;
+  set_LED_flags(flags);
+}
+
+void send_a_bit_out_the_LED(char which_LED, int bit_value) {
+  switch (bit_value) {
+    case 0:
+      turn_off_LED(which_LED);
+      break;
+    case 1:
+      turn_on_LED(which_LED);
+      break;
+    default:
+      printf("In file %s at line %d, this should never happen.\n",
+        __FILE__, __LINE__);
+      exit(EXIT_FAILURE);
+      break;
+  }
+  wait_one_bit_interval();
+}
+
+void wait_one_bit_interval(void) {
+  usleep(1000000 / SPEED);
 }
 
